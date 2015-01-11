@@ -1,50 +1,92 @@
+If you play with Lua module, You probably know that becomes complicate with lot of modules, directories, path, etc.
+
 Now I use newmodule everywhere.
-But newmodule.lua must be available soon.
+
+
+# What is the problem ?
+
+* The Lua 5.0 introduce the module() function. This way to define module was critiqued.
+
+   See http://lua-users.org/wiki/LuaModuleFunctionCritiqued.
+
+* A better and simple way to define module (without the module() function !) was proposed.
+
+   See : http://lua-users.org/wiki/ModulesTutorial.
+
+* In Lua 5.2 the module() function was removed.
+
+   See http://www.lua.org/manual/5.2/manual.html#8.2
+
+
+# More about Lua modules ?
+
+You should read the following article :
+
+   kikito wrote:
+ ```
+     I wrote about modules, packages and multiple files here:
+     http://kiki.to/blog/2014/04/12/rule-5-beware-of-multiple-files/
+ ```
+
+You should also read : https://love2d.org/forums/viewtopic.php?p=178568#p178568
+
+
+# Download
+
+On github : https://github.com/tst2005/lua-newmodule.git
+
+
+# Installation
 
 You can copy it on the main directory.
-I choose to create my own framework to keep my newmodule in subdirectories with lot of other stuff ... but it's another story!
+Or change the package path.
+
+
+I choose to create my own framework to keep my newmodule in subdirectories (and lot of other stuff)
+The framework will be release soon at https://github.com/tst2005/dragoon-framework.git )
+
 
 # Documentation
 
 ## require("newmodule")
-
-Load the newmodule.
-Return: a table
-Sample :
-```
-local newmodule = require("newmodule")
-```
-
-## require("newmodule")(...)
 
 Use the newmodule to create a new table.
 Detect the name of the module (_M._NAME usefull for debug message)
 Detect the module name, usefull to require sub module
 Detect the module parent name, usefull to require module in the same directory
 The table returns follow the format :
-```local _M = require("newmodule")(...)```
+
+
+```
+loccal _M = require("newmodule")(...)
+```
 
 equal to :
 
 ```
- local _M = {
+local _M = {
   _NAME = "lua-foo.foo",
   _PATH = "lua-foo.foo",
   _PPATH = "lua-foo",
- }
+}
 ```
+In this case _NAME will always equal to _PATH.
+
 
 Load a sub module :
-
 ```
 local child = require(_M.PATH .. ".childmodule")
+or
+local child = child_require("childmodule")
 ```
 
 Load another module in the same directory :
-
 ```
 local bro = require(_M.PPATH .. ".brothermodule")
+or
+local bro = brother_require("brothermodule")
 ```
+
 
 ## require("newmodule"):from(a_table, ...)
 
@@ -66,27 +108,95 @@ A special stuff for the init.lua file that is only use to redirect the loader to
 return require("newmodule"):initload("realmodule", ...)
 ```
 
-TODO: speak about generated child_require() and brother_require()
+# Details about the module fields
+
+The _NAME field will be kept if already exists.
+
+The _PATH, _PPATH and _CALLEDWITH field will be overwritten if exists.
+
+If not exists all fields will be created.
+
+## _NAME
+
+In some cases it's interesting to include in error message the name of the module.
+I think the _NAME should contains module name readable by human text, like "bar, the sub-module of foo" instead of "foo.bar"
 
 
-# Download
+Other implementation of module seems use this field.
+I can not use it to manage module path for automatic loading...
 
-on github : https://github.com/tst2005/lua-newmodule.git
+## _PATH
+
+It's the module path (without ".init" suffix if present)
+
+## _PPATH
+
+It's the _PATH without one level.
+if _PATH = lib.foo.foo then _PPATH will be lib.foo.
+
+## _CALLEDWITH
+
+CALLEDWITH is most for debug purpose.
+It's a copy of the 1st argument passed (like the _PATH but the ".init" suffix is never removed)
+
+# Localised Loaders
+
+What is the difference between child and brother module
+
+```
+parent/
+     mod.lua
+     bro.lua
+     mod/child.lua
+```
+
+In mod.lua the bro.lua is in the same parent directory, it's a brother module, should be loaded with brother_require("bro")
+In mod.lua the child.lua is in a subdirectory with the name of mod.lua (mod.child) it's a child of mod and should be loaded with child_require("child").
+It equals to brother_require("mod.child").
+
+## Where is the child_require
+and brother_require ?
+
+Both are generated during the require("newmodule")(...) call.
+
+mod.lua
+```
+local _M, child_require, brother_require = require("newmodule")(...)
+local bro = brother_require("bro")
+local child = child_require("child")
+```
+
+## child_require(childname)
+
+The child_require will internally use the _M.
+_PATH.
+
+mod.lua :
+```
+local _M, child_require = require("newmodule")(...)
+local child = child_require("child")
+```
+
+## brother_require(brothername)
+
+The child_require will internally use the _M.
+_PPATH.
+
+```
+local _M, child_require, brother_require = require("newmodule")(...)
+local bro = brother_require("bro")
+```
 
 
+# Sample of use
 
-
-# How to use newmodule.lua :
-
-
-Sample :
-
- * test.foo.sh
- * foo/
- * - init.lua
- * - foo.lua
- * - x.lua
-
+```
+test.foo.sh
+foo/
+     init.lua
+     foo.lua
+     x.lua
+```
 
 init.lua :
 ```
@@ -97,11 +207,11 @@ return require("newmodule"):initload("foo", ...)
 foo.lua :
 ```
 local _M, creq, breq = require("newmodule")(...)
-print("cpp: _NAME=", _M._NAME)
-print("cpp: _PATH=", _M._PATH)
-print("cpp: _PPATH=", _M._PPATH)
+print("foo: _NAME=", _M._NAME)
+print("foo: _PATH=", _M._PATH)
+print("foo: _PPATH=", _M._PPATH)
 
-local x = (breq "x") -- require("cpp.x")
+local x = (breq "x") -- require("foo.x")
 return _M
 ```
 
@@ -123,25 +233,3 @@ lua -l newmodule -e 'require"foo.foo"'
 cd foo ; lua -l newmodule -e 'require"foo"'
 ```
 
-```
-$ sh test.foo.sh
-cpp: _NAME=	foo.foo
-cpp: _PATH=	foo.foo
-cpp: _PPATH=	foo
-x ok?	ok
-
-cpp: _NAME=	foo.foo
-cpp: _PATH=	foo.foo
-cpp: _PPATH=	foo
-x ok?	ok
-
-cpp: _NAME=	foo.foo
-cpp: _PATH=	foo.foo
-cpp: _PPATH=	foo
-x ok?	ok
-
-cpp: _NAME=	foo
-cpp: _PATH=	foo
-cpp: _PPATH=	
-x ok?	ok
-```
